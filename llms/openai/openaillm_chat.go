@@ -96,7 +96,7 @@ func (o *Chat) Generate(ctx context.Context, messageSets [][]schema.ChatMessage,
 		msg := &schema.AIChatMessage{
 			Content: result.Choices[0].Message.Content,
 		}
-		if result.Choices[0].FinishReason == "function_call" {
+		if result.Choices[0].Message.FunctionCall != nil {
 			msg.FunctionCall = &schema.FunctionCall{
 				Name:      result.Choices[0].Message.FunctionCall.Name,
 				Arguments: result.Choices[0].Message.FunctionCall.Arguments,
