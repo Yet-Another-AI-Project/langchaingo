@@ -125,15 +125,15 @@ type FunctionDefinition struct {
 }
 
 // FunctionCallBehavior is the behavior to use when calling functions.
-type FunctionCallBehavior string
+type FunctionCallBehavior any
 
 const (
 	// FunctionCallBehaviorUnspecified is the empty string.
-	FunctionCallBehaviorUnspecified FunctionCallBehavior = ""
+	FunctionCallBehaviorUnspecified = ""
 	// FunctionCallBehaviorNone will not call any functions.
-	FunctionCallBehaviorNone FunctionCallBehavior = "none"
+	FunctionCallBehaviorNone = "none"
 	// FunctionCallBehaviorAuto will call functions automatically.
-	FunctionCallBehaviorAuto FunctionCallBehavior = "auto"
+	FunctionCallBehaviorAuto = "auto"
 )
 
 // FunctionCall is a call to a function.

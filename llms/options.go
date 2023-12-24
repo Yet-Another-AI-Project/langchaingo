@@ -57,13 +57,13 @@ type FunctionDefinition struct {
 }
 
 // FunctionCallBehavior is the behavior to use when calling functions.
-type FunctionCallBehavior string
+type FunctionCallBehavior any
 
 const (
 	// FunctionCallBehaviorNone will not call any functions.
-	FunctionCallBehaviorNone FunctionCallBehavior = "none"
+	FunctionCallBehaviorNone = "none"
 	// FunctionCallBehaviorAuto will call functions automatically.
-	FunctionCallBehaviorAuto FunctionCallBehavior = "auto"
+	FunctionCallBehaviorAuto = "auto"
 )
 
 // WithModel is an option for LLM.Call.
