@@ -47,6 +47,31 @@ func Call(ctx context.Context, c Chain, inputValues map[string]any, options ...C
 		callbacksHandler.HandleChainStart(ctx, inputValues)
 	}
 
+	outputValues, err := callChain(ctx, c, fullValues, options...)
+	if err != nil {
+		if callbacksHandler != nil {
+			callbacksHandler.HandleChainError(ctx, err)
+		}
+		return outputValues, err
+	}
+
+	if callbacksHandler != nil {
+		callbacksHandler.HandleChainEnd(ctx, outputValues)
+	}
+
+	if err = c.GetMemory().SaveContext(ctx, inputValues, outputValues); err != nil {
+		return outputValues, err
+	}
+
+	return outputValues, nil
+}
+
+func callChain(
+	ctx context.Context,
+	c Chain,
+	fullValues map[string]any,
+	options ...ChainCallOption,
+) (map[string]any, error) {
 	if err := validateInputs(c, fullValues); err != nil {
 		return nil, err
 	}
@@ -59,20 +84,11 @@ func Call(ctx context.Context, c Chain, inputValues map[string]any, options ...C
 		return outputValues, err
 	}
 
-	if callbacksHandler != nil {
-		callbacksHandler.HandleChainEnd(ctx, outputValues)
-	}
-
-	err = c.GetMemory().SaveContext(ctx, inputValues, outputValues)
-	if err != nil {
-		return outputValues, err
-	}
-
 	return outputValues, nil
 }
 
-// Run can be used to execute a chain if the chain only expects one input and one
-// string output.
+// Run can be used to execute a chain if the chain only expects one input and
+// one string output.
 func Run(ctx context.Context, c Chain, input any, options ...ChainCallOption) (string, error) {
 	inputKeys := c.GetInputKeys()
 	memoryKeys := c.GetMemory().MemoryVariables(ctx)

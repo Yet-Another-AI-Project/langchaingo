@@ -35,6 +35,15 @@ type EmbedderClient interface {
 	CreateEmbedding(ctx context.Context, texts []string) ([][]float32, error)
 }
 
+// EmbedderClientFunc is an adapter to allow the use of ordinary functions as Embedder Clients. If
+// `f` is a function with the appropriate signature, `EmbedderClientFunc(f)` is an `EmbedderClient`
+// that calls `f`.
+type EmbedderClientFunc func(ctx context.Context, texts []string) ([][]float32, error)
+
+func (e EmbedderClientFunc) CreateEmbedding(ctx context.Context, texts []string) ([][]float32, error) {
+	return e(ctx, texts)
+}
+
 type EmbedderImpl struct {
 	client EmbedderClient
 
@@ -91,28 +100,12 @@ func BatchedEmbed(ctx context.Context, embedder EmbedderClient, texts []string, 
 	batchedTexts := BatchTexts(texts, batchSize)
 
 	emb := make([][]float32, 0, len(texts))
-	for _, texts := range batchedTexts {
-		curTextEmbeddings, err := embedder.CreateEmbedding(ctx, texts)
+	for _, batch := range batchedTexts {
+		curBatchEmbeddings, err := embedder.CreateEmbedding(ctx, batch)
 		if err != nil {
 			return nil, err
 		}
-		// If the size of this batch is 1, don't average/combine the vectors.
-		if len(texts) == 1 {
-			emb = append(emb, curTextEmbeddings[0])
-			continue
-		}
-
-		textLengths := make([]int, 0, len(texts))
-		for _, text := range texts {
-			textLengths = append(textLengths, len(text))
-		}
-
-		combined, err := CombineVectors(curTextEmbeddings, textLengths)
-		if err != nil {
-			return nil, err
-		}
-
-		emb = append(emb, combined)
+		emb = append(emb, curBatchEmbeddings...)
 	}
 
 	return emb, nil

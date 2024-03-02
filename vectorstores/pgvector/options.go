@@ -65,6 +65,45 @@ func WithCollectionTableName(name string) Option {
 	}
 }
 
+// WithConn is an option for specifying the Postgres connection.
+// From pgx doc: it is not safe for concurrent usage.Use a connection pool to manage access
+// to multiple database connections from multiple goroutines.
+func WithConn(conn *pgx.Conn) Option {
+	return func(p *Store) {
+		p.conn = conn
+	}
+}
+
+// WithCollectionMetadata is an option for specifying the collection metadata.
+func WithCollectionMetadata(metadata map[string]any) Option {
+	return func(p *Store) {
+		p.collectionMetadata = metadata
+	}
+}
+
+// WithVectorDimensions is an option for specifying the vector size.
+func WithVectorDimensions(size int) Option {
+	return func(p *Store) {
+		p.vectorDimensions = size
+	}
+}
+
+// WithHNSWIndex is an option for specifying the HNSW index parameters.
+// See here for more details: https://github.com/pgvector/pgvector#hnsw
+//
+// m: he max number of connections per layer (16 by default)
+// efConstruction: the size of the dynamic candidate list for constructing the graph (64 by default)
+// distanceFunction: the distance function to use (l2 by default).
+func WithHNSWIndex(m int, efConstruction int, distanceFunction string) Option {
+	return func(p *Store) {
+		p.hnswIndex = &HNSWIndex{
+			m:                m,
+			efConstruction:   efConstruction,
+			distanceFunction: distanceFunction,
+		}
+	}
+}
+
 func applyClientOptions(opts ...Option) (Store, error) {
 	o := &Store{
 		collectionName:      DefaultCollectionName,
@@ -81,7 +120,7 @@ func applyClientOptions(opts ...Option) (Store, error) {
 		o.postgresConnectionURL = os.Getenv("PGVECTOR_CONNECTION_STRING")
 	}
 
-	if o.postgresConnectionURL == "" {
+	if o.postgresConnectionURL == "" && o.conn == nil {
 		return Store{}, fmt.Errorf("%w: missing postgresConnectionURL", ErrInvalidOptions)
 	}
 
