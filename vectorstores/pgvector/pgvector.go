@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pgvector/pgvector-go"
 	"github.com/tmc/langchaingo/embeddings"
 	"github.com/tmc/langchaingo/schema"
@@ -34,19 +35,28 @@ var (
 	ErrUnsupportedOptions         = errors.New("unsupported options")
 )
 
+// PGXConn represents both a pgx.Conn and pgxpool.Pool conn.
+type PGXConn interface {
+	Ping(ctx context.Context) error
+	Begin(ctx context.Context) (pgx.Tx, error)
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, arguments ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, arguments ...any) pgx.Row
+	SendBatch(ctx context.Context, batch *pgx.Batch) pgx.BatchResults
+}
+
 // Store is a wrapper around the pgvector client.
 type Store struct {
-	embedder              embeddings.Embedder
-	conn                  *pgx.Conn
-	postgresConnectionURL string
-	embeddingTableName    string
-	collectionTableName   string
-	collectionName        string
-	collectionUUID        string
-	collectionMetadata    map[string]any
-	preDeleteCollection   bool
-	vectorDimensions      int
-	hnswIndex             *HNSWIndex
+	embedder            embeddings.Embedder
+	conn                PGXConn
+	embeddingTableName  string
+	collectionTableName string
+	collectionName      string
+	collectionUUID      string
+	collectionMetadata  map[string]any
+	preDeleteCollection bool
+	vectorDimensions    int
+	hnswIndex           *HNSWIndex
 }
 
 type HNSWIndex struct {
@@ -63,13 +73,6 @@ func New(ctx context.Context, opts ...Option) (Store, error) {
 	if err != nil {
 		return Store{}, err
 	}
-	if store.conn == nil {
-		store.conn, err = pgx.Connect(ctx, store.postgresConnectionURL)
-		if err != nil {
-			return Store{}, err
-		}
-	}
-
 	if err = store.conn.Ping(ctx); err != nil {
 		return Store{}, err
 	}
@@ -337,19 +340,19 @@ func (s Store) Search(
 	}
 	whereQuerys := make([]string, 0)
 	for k, v := range filter {
-		whereQuerys = append(whereQuerys, fmt.Sprintf("(data.cmetadata ->> '%s') = '%s'", k, v))
+		whereQuerys = append(whereQuerys, fmt.Sprintf("(%s.cmetadata ->> '%s') = '%s'", s.embeddingTableName, k, v))
 	}
 	whereQuery := strings.Join(whereQuerys, " AND ")
 	if len(whereQuery) == 0 {
 		whereQuery = "TRUE"
 	}
 	sql := fmt.Sprintf(`SELECT
-	document,
-	cmetadata
+	%s.document,
+	%s.cmetadata
 FROM %s
 JOIN %s ON %s.collection_id=%s.uuid
 WHERE %s.name='%s' AND %s
-LIMIT $1`, s.embeddingTableName,
+LIMIT $1`, s.embeddingTableName, s.embeddingTableName, s.embeddingTableName,
 		s.collectionTableName, s.embeddingTableName, s.collectionTableName, s.collectionTableName, collectionName,
 		whereQuery)
 	rows, err := s.conn.Query(ctx, sql, numDocuments)
@@ -361,17 +364,12 @@ LIMIT $1`, s.embeddingTableName,
 
 	for rows.Next() {
 		doc := schema.Document{}
-		if err := rows.Scan(&doc.PageContent, &doc.Metadata, &doc.Score); err != nil {
+		if err := rows.Scan(&doc.PageContent, &doc.Metadata); err != nil {
 			return nil, err
 		}
 		docs = append(docs, doc)
 	}
 	return docs, rows.Err()
-}
-
-// Close closes the connection.
-func (s Store) Close(ctx context.Context) error {
-	return s.conn.Close(ctx)
 }
 
 func (s Store) DropTables(ctx context.Context) error {

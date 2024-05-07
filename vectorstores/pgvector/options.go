@@ -3,10 +3,7 @@ package pgvector
 import (
 	"errors"
 	"fmt"
-	"os"
-	"strings"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/tmc/langchaingo/embeddings"
 )
 
@@ -30,13 +27,6 @@ func WithEmbedder(e embeddings.Embedder) Option {
 	}
 }
 
-// WithConnectionURL is an option for specifying the Postgres connection URL. Must be set.
-func WithConnectionURL(connectionURL string) Option {
-	return func(p *Store) {
-		p.postgresConnectionURL = connectionURL
-	}
-}
-
 // WithPreDeleteCollection is an option for setting if the collection should be deleted before creating.
 func WithPreDeleteCollection(preDelete bool) Option {
 	return func(p *Store) {
@@ -54,21 +44,21 @@ func WithCollectionName(name string) Option {
 // WithEmbeddingTableName is an option for specifying the embedding table name.
 func WithEmbeddingTableName(name string) Option {
 	return func(p *Store) {
-		p.embeddingTableName = tableName(name)
+		p.embeddingTableName = name
 	}
 }
 
 // WithCollectionTableName is an option for specifying the collection table name.
 func WithCollectionTableName(name string) Option {
 	return func(p *Store) {
-		p.collectionTableName = tableName(name)
+		p.collectionTableName = name
 	}
 }
 
 // WithConn is an option for specifying the Postgres connection.
 // From pgx doc: it is not safe for concurrent usage.Use a connection pool to manage access
 // to multiple database connections from multiple goroutines.
-func WithConn(conn *pgx.Conn) Option {
+func WithConn(conn PGXConn) Option {
 	return func(p *Store) {
 		p.conn = conn
 	}
@@ -116,12 +106,8 @@ func applyClientOptions(opts ...Option) (Store, error) {
 		opt(o)
 	}
 
-	if o.postgresConnectionURL == "" {
-		o.postgresConnectionURL = os.Getenv("PGVECTOR_CONNECTION_STRING")
-	}
-
-	if o.postgresConnectionURL == "" && o.conn == nil {
-		return Store{}, fmt.Errorf("%w: missing postgresConnectionURL", ErrInvalidOptions)
+	if o.conn == nil {
+		return Store{}, fmt.Errorf("%w: missing postgres connection", ErrInvalidOptions)
 	}
 
 	if o.embedder == nil {
@@ -129,11 +115,4 @@ func applyClientOptions(opts ...Option) (Store, error) {
 	}
 
 	return *o, nil
-}
-
-// tableName returns the table name with the schema sanitized.
-func tableName(name string) string {
-	nameParts := strings.Split(name, ".")
-
-	return pgx.Identifier(nameParts).Sanitize()
 }
